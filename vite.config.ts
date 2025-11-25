@@ -19,10 +19,10 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ["axios", "react", "react-dom"],
+          vendor: ["react", "react-dom", "axios"],
         },
       },
     },
-    chunkSizeWarningLimit: 2000, // (optional) increase warning threshold
+    chunkSizeWarningLimit: 3000, // (optional) increase warning threshold
   },
 });
