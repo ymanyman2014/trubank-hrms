@@ -1,0 +1,7 @@
+.datepicker-float {
+  z-index: 50 !important;
+  position: absolute !important;
+  left: 0 !important;
+  top: 40px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
