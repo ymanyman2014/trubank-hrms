@@ -41,6 +41,10 @@ export default function JobApplicationLanding() {
   const [, setExamSubmitted] = useState(false);
   const [jobTitle, setJobTitle] = useState("");
 
+  // Modal state for no face detected warning
+  const [showNoFaceModal, setShowNoFaceModal] = useState(false);
+  const [noFaceCountdown, setNoFaceCountdown] = useState(10);
+
   // Ensure video element displays the camera stream
   useEffect(() => {
     if (showCamera && cameraStream && videoRef.current) {
@@ -369,7 +373,7 @@ export default function JobApplicationLanding() {
     let video: HTMLVideoElement | null = null;
     let interval: NodeJS.Timeout;
     let modelsLoaded = false;
-    let noFaceStart: number | null = null;
+    let noFaceActive = false;
     async function startFaceDetection() {
       if (examStarted && step === 2) {
         try {
@@ -395,18 +399,17 @@ export default function JobApplicationLanding() {
                 new faceapi.TinyFaceDetectorOptions()
               );
               if (!result) {
-                if (noFaceStart === null) {
-                  noFaceStart = Date.now();
-                } else {
-                  const elapsed = Date.now() - noFaceStart;
-                  if (elapsed >= 10000) {
-                    endExam(
-                      "Exam ended: No face detected by camera for 10 seconds."
-                    );
-                  }
+                if (!noFaceActive) {
+                  noFaceActive = true;
+                  setShowNoFaceModal(true);
+                  setNoFaceCountdown(10);
                 }
               } else {
-                noFaceStart = null;
+                if (noFaceActive) {
+                  noFaceActive = false;
+                  setShowNoFaceModal(false);
+                  setNoFaceCountdown(10);
+                }
               }
             }
           }, 1000);
@@ -422,8 +425,25 @@ export default function JobApplicationLanding() {
         document.body.removeChild(video);
       }
       if (interval) clearInterval(interval);
+      setShowNoFaceModal(false);
+      setNoFaceCountdown(10);
     };
   }, [examStarted, step]);
+
+  // Countdown effect for no face detected modal
+  useEffect(() => {
+    if (showNoFaceModal) {
+      if (noFaceCountdown === 0) {
+        setShowNoFaceModal(false);
+        endExam("Exam ended: No face detected by camera for 10 seconds.");
+        return;
+      }
+      const countdownInterval = setInterval(() => {
+        setNoFaceCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+      return () => clearInterval(countdownInterval);
+    }
+  }, [showNoFaceModal, noFaceCountdown]);
 
   useEffect(() => {
     if (jobId === 0) {
@@ -444,6 +464,51 @@ export default function JobApplicationLanding() {
 
   return (
     <div className="dark p-6 max-w-2xl mx-auto bg-gray-900 min-h-screen flex items-center justify-center">
+      {/* Modal for no face detected warning */}
+      {showNoFaceModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.7)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div
+            style={{
+              background: "#222",
+              borderRadius: "16px",
+              padding: "2.5em 2em",
+              boxShadow: "0 0 24px 0 rgba(0,0,0,0.5)",
+              textAlign: "center",
+              maxWidth: "400px",
+            }}
+          >
+            <h2 className="text-xl font-bold text-red-400 mb-4">
+              Warning: No Face Detected
+            </h2>
+            <p className="text-gray-200 mb-2">
+              Please ensure your face is visible to the camera.
+              <br />
+              The exam will end in
+              <span className="text-red-400 font-bold text-2xl mx-2">
+                {noFaceCountdown}
+              </span>
+              seconds if your face is not detected again.
+            </p>
+            <p className="text-gray-400 text-sm">
+              If your face is detected before the countdown ends, you may
+              continue the exam.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-lg p-8 flex flex-col items-stretch justify-center gap-8 w-full">
         <div
           className="absolute inset-0 rounded-2xl pointer-events-none"

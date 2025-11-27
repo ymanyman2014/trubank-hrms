@@ -289,10 +289,10 @@ const LeaveRequestsTable = () => {
                   Type
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Start Date
+                  Reason
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  End Date
+                  Date
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   Remarks
@@ -330,18 +330,19 @@ const LeaveRequestsTable = () => {
                       {req.leave_type || req.type || ""}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                      {req.reason || req.reason || ""}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                       {req.start_date
                         ? req.start_date.split("T")[0]
                         : req.date
                         ? req.date.split("T")[0]
                         : ""}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                      {req.end_date
-                        ? req.end_date.split("T")[0]
-                        : req.date
-                        ? req.date.split("T")[0]
-                        : ""}
+                      {req.end_date && (
+                        <div className="text-xs text-gray-500 dark:text-gray-300">
+                          {req.end_date.split("T")[0]}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                       <input
