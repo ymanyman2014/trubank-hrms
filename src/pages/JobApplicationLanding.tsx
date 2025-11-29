@@ -35,6 +35,10 @@ export default function JobApplicationLanding() {
   const [faceDetected, setFaceDetected] = useState(false);
   const [faceCheckLoading, setFaceCheckLoading] = useState(false);
   const [faceCheckError, setFaceCheckError] = useState("");
+  // Liveness detection state
+  const [livenessPassed, setLivenessPassed] = useState(false);
+  const [livenessChallengeActive, setLivenessChallengeActive] = useState(false);
+  const [livenessMessage, setLivenessMessage] = useState("");
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -83,19 +87,34 @@ export default function JobApplicationLanding() {
       setFaceCheckError("Camera access denied or not available.");
     }
   };
-  // Pre-exam face detection effect (step 2, before examStarted)
+  // Pre-exam face detection and liveness (blink) challenge
   useEffect(() => {
     let video: HTMLVideoElement | null = null;
     let interval: NodeJS.Timeout;
     let modelsLoaded = false;
+    let blinked = false;
+    // Helper: Calculate Eye Aspect Ratio (EAR)
+    function getEAR(eye: any[]) {
+      // eye: array of 6 points [x, y]
+      const p2p6 = Math.hypot(eye[1].x - eye[5].x, eye[1].y - eye[5].y);
+      const p3p4 = Math.hypot(eye[2].x - eye[4].x, eye[2].y - eye[4].y);
+      const p1p5 = Math.hypot(eye[0].x - eye[3].x, eye[0].y - eye[3].y);
+      return (p2p6 + p3p4) / (2.0 * p1p5);
+    }
     async function startPreExamFaceDetection() {
       if (step === 2 && !examStarted && showCamera && videoRef.current) {
         setFaceCheckLoading(true);
         setFaceCheckError("");
+        setLivenessPassed(false);
+        setLivenessChallengeActive(true);
+        setLivenessMessage(
+          "Please blink your eyes to verify you are a real person."
+        );
         try {
           // Load models if not already loaded
           if (!modelsLoaded) {
             await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
+            await faceapi.nets.faceLandmark68TinyNet.loadFromUri("/models");
             modelsLoaded = true;
             console.log("FaceAPI: Model loaded");
           }
@@ -104,46 +123,49 @@ export default function JobApplicationLanding() {
             "Face detection model failed to load. Please check /models folder and reload the page."
           );
           setFaceCheckLoading(false);
-          console.error("FaceAPI: Model load error", err);
+          setLivenessChallengeActive(false);
           return;
         }
-        try {
-          // Use the camera preview video element
-          video = videoRef.current;
-          interval = setInterval(async () => {
-            if (video && video.readyState === 4) {
-              try {
-                const result = await faceapi.detectSingleFace(
-                  video,
-                  new faceapi.TinyFaceDetectorOptions()
-                );
-                console.log("FaceAPI: Detection result", result);
-                if (result) {
-                  setFaceDetected(true);
-                  setFaceCheckError("");
-                } else {
-                  setFaceDetected(false);
-                  setFaceCheckError(
-                    "No face detected. Please ensure your face is visible to the camera."
+        video = videoRef.current;
+        interval = setInterval(async () => {
+          if (video && video.readyState === 4) {
+            try {
+              const result = await faceapi
+                .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                .withFaceLandmarks(true);
+              if (result) {
+                setFaceDetected(true);
+                setFaceCheckError("");
+                // Liveness: blink detection
+                const landmarks = result.landmarks;
+                const leftEye = landmarks.getLeftEye();
+                const rightEye = landmarks.getRightEye();
+                const leftEAR = getEAR(leftEye);
+                const rightEAR = getEAR(rightEye);
+                // Typical EAR threshold for blink: < 0.22
+                if ((leftEAR < 0.22 || rightEAR < 0.22) && !blinked) {
+                  blinked = true;
+                  setLivenessMessage(
+                    "Blink detected! You are verified as a real person."
                   );
+                  setLivenessPassed(true);
+                  setLivenessChallengeActive(false);
                 }
-                setFaceCheckLoading(false);
-              } catch (detectErr) {
+              } else {
+                setFaceDetected(false);
                 setFaceCheckError(
-                  "Face detection failed. Please check your camera and reload the page."
+                  "No face detected. Please ensure your face is visible to the camera."
                 );
-                setFaceCheckLoading(false);
-                console.error("FaceAPI: Detection error", detectErr);
               }
+              setFaceCheckLoading(false);
+            } catch (detectErr) {
+              setFaceCheckError(
+                "Face detection failed. Please check your camera and reload the page."
+              );
+              setFaceCheckLoading(false);
             }
-          }, 1500);
-        } catch (camErr) {
-          setFaceCheckError(
-            "Camera access error. Please check your camera permissions and reload the page."
-          );
-          setFaceCheckLoading(false);
-          console.error("FaceAPI: Camera error", camErr);
-        }
+          }
+        }, 800);
       }
     }
     startPreExamFaceDetection();
@@ -152,6 +174,9 @@ export default function JobApplicationLanding() {
       setFaceDetected(false);
       setFaceCheckError("");
       setFaceCheckLoading(false);
+      setLivenessChallengeActive(false);
+      setLivenessPassed(false);
+      setLivenessMessage("");
     };
   }, [step, examStarted, showCamera, videoRef]);
 
@@ -257,15 +282,20 @@ export default function JobApplicationLanding() {
 
   const handleStartExam = async () => {
     setProctoringError("");
-    // Only allow starting if face detected
+    // Only allow starting if face detected and liveness passed
     if (!faceDetected) {
       setProctoringError(
         "Cannot start exam: No face detected. Please ensure your face is visible to the camera."
       );
       return;
     }
+    if (!livenessPassed) {
+      setProctoringError(
+        "Cannot start exam: Liveness check not passed. Please blink your eyes to verify you are a real person."
+      );
+      return;
+    }
     // Validate employeeId
-    console.log("handleStartExam: employeeId (userId)", employeeId);
     if (!employeeId || isNaN(employeeId)) {
       setProctoringError(
         "Cannot start exam: Invalid or missing employee ID (userId). Please contact support."
@@ -301,7 +331,6 @@ export default function JobApplicationLanding() {
       setProctoringError(
         "Failed to start AI proctoring. Please try again or contact support."
       );
-      console.error("Proctoring POST error:", err);
       return;
     }
     // Request fullscreen after exam setup, before showing questions
@@ -368,18 +397,28 @@ export default function JobApplicationLanding() {
     };
   }, [examStarted, step]);
 
-  // End exam if no face detected during exam (real detection)
+  // End exam if no face detected or no liveness (blink) during exam
   useEffect(() => {
     let video: HTMLVideoElement | null = null;
     let interval: NodeJS.Timeout;
     let modelsLoaded = false;
     let noFaceActive = false;
+    let blinkedRecently = true;
+    let blinkTimeout: NodeJS.Timeout;
+    // Helper: Calculate Eye Aspect Ratio (EAR)
+    function getEAR(eye: any[]) {
+      const p2p6 = Math.hypot(eye[1].x - eye[5].x, eye[1].y - eye[5].y);
+      const p3p4 = Math.hypot(eye[2].x - eye[4].x, eye[2].y - eye[4].y);
+      const p1p5 = Math.hypot(eye[0].x - eye[3].x, eye[0].y - eye[3].y);
+      return (p2p6 + p3p4) / (2.0 * p1p5);
+    }
     async function startFaceDetection() {
       if (examStarted && step === 2) {
         try {
           // Load models if not already loaded
           if (!modelsLoaded) {
             await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
+            await faceapi.nets.faceLandmark68TinyNet.loadFromUri("/models");
             modelsLoaded = true;
           }
           video = document.createElement("video");
@@ -392,12 +431,16 @@ export default function JobApplicationLanding() {
           video.srcObject = stream;
           video.style.display = "none";
           document.body.appendChild(video);
+          // Liveness: require blink every 30 seconds
+          blinkedRecently = true;
+          blinkTimeout = setTimeout(() => {
+            blinkedRecently = false;
+          }, 30000);
           interval = setInterval(async () => {
             if (video && video.readyState === 4) {
-              const result = await faceapi.detectSingleFace(
-                video,
-                new faceapi.TinyFaceDetectorOptions()
-              );
+              const result = await faceapi
+                .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                .withFaceLandmarks(true);
               if (!result) {
                 if (!noFaceActive) {
                   noFaceActive = true;
@@ -409,6 +452,25 @@ export default function JobApplicationLanding() {
                   noFaceActive = false;
                   setShowNoFaceModal(false);
                   setNoFaceCountdown(10);
+                }
+                // Liveness: blink detection
+                const landmarks = result.landmarks;
+                const leftEye = landmarks.getLeftEye();
+                const rightEye = landmarks.getRightEye();
+                const leftEAR = getEAR(leftEye);
+                const rightEAR = getEAR(rightEye);
+                if (leftEAR < 0.22 || rightEAR < 0.22) {
+                  blinkedRecently = true;
+                  if (blinkTimeout) clearTimeout(blinkTimeout);
+                  blinkTimeout = setTimeout(() => {
+                    blinkedRecently = false;
+                  }, 30000);
+                }
+                // If no blink in last 30 seconds, end exam
+                if (!blinkedRecently) {
+                  endExam(
+                    "Exam ended: Liveness check failed. No blink detected in 30 seconds."
+                  );
                 }
               }
             }
@@ -425,6 +487,7 @@ export default function JobApplicationLanding() {
         document.body.removeChild(video);
       }
       if (interval) clearInterval(interval);
+      if (blinkTimeout) clearTimeout(blinkTimeout);
       setShowNoFaceModal(false);
       setNoFaceCountdown(10);
     };
@@ -678,6 +741,16 @@ export default function JobApplicationLanding() {
                     {faceCheckError}
                   </div>
                 )}
+                {livenessChallengeActive && (
+                  <div className="text-yellow-400 text-sm mb-2">
+                    {livenessMessage}
+                  </div>
+                )}
+                {livenessPassed && (
+                  <div className="text-green-400 text-sm mb-2">
+                    Liveness check passed!
+                  </div>
+                )}
                 {(proctoringError || restrictionError) && (
                   <div className="text-red-400 text-sm mb-3">
                     {proctoringError || restrictionError}
@@ -693,13 +766,13 @@ export default function JobApplicationLanding() {
                   </button>
                   <button
                     className={`px-4 py-2 rounded font-semibold ${
-                      showCamera && faceDetected
+                      showCamera && faceDetected && livenessPassed
                         ? "bg-green-600 text-white"
                         : "bg-gray-400 text-gray-200 cursor-not-allowed"
                     }`}
                     type="button"
                     onClick={handleStartExam}
-                    disabled={!(showCamera && faceDetected)}
+                    disabled={!(showCamera && faceDetected && livenessPassed)}
                   >
                     Start Exam
                   </button>
