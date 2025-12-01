@@ -1644,307 +1644,327 @@ const ApplicantDashboard: React.FC = () => {
             No applied jobs found.
           </div>
         ) : (
-          appliedJobs.map((job, idx) => {
-            // Debug: log status fields for each job
-            console.log("Applied Job Status:", {
-              exam_status: job.exam_status,
-              req_status: job.req_status,
-              interview_status: job.interview_status,
-              interview_date: job.interview_date,
-              result: job.result,
-            });
-            // Step logic: only first 'Pending' step is in-progress, previous steps are done if status is Pass, Fail, or Scheduled (for interview)
-            function normalizeStatus(val: string | undefined | null) {
-              return (val || "").toLowerCase();
-            }
-            // Removed unused statusList variable
-            // Treat 'Insufficient' as 'Fail' for requirements
-            const isReqFail = ["fail", "insufficient"].includes(
-              normalizeStatus(job.req_status)
-            );
-            const failIndex = isReqFail
-              ? 2
-              : ["fail"].includes(normalizeStatus(job.exam_status))
-              ? 1
-              : ["fail"].includes(normalizeStatus(job.interview_status))
-              ? 3
-              : ["fail"].includes(normalizeStatus(job.result))
-              ? 4
-              : -1;
-            const stepStatus = [
-              job.submitted,
-              ["pass", "fail"].includes(normalizeStatus(job.exam_status)),
-              ["pass", "fail", "insufficient"].includes(
+          // Sort jobs: result "" at top, "Fail"/"Failed" at bottom, others in between
+          [...appliedJobs]
+            .sort((a, b) => {
+              const norm = (v: string | undefined) =>
+                (v || "").trim().toLowerCase();
+              const aRes = norm(a.result);
+              const bRes = norm(b.result);
+              if (aRes === "" && bRes !== "") return -1;
+              if (aRes !== "" && bRes === "") return 1;
+              if (
+                ["fail", "failed"].includes(aRes) &&
+                !["fail", "failed"].includes(bRes)
+              )
+                return 1;
+              if (
+                !["fail", "failed"].includes(aRes) &&
+                ["fail", "failed"].includes(bRes)
+              )
+                return -1;
+              return 0;
+            })
+            .map((job, idx) => {
+              // Debug: log status fields for each job
+              console.log("Applied Job Status:", {
+                exam_status: job.exam_status,
+                req_status: job.req_status,
+                interview_status: job.interview_status,
+                interview_date: job.interview_date,
+                result: job.result,
+              });
+              function normalizeStatus(val: string | undefined | null) {
+                return (val || "").toLowerCase();
+              }
+              const isReqFail = ["fail", "insufficient"].includes(
                 normalizeStatus(job.req_status)
-              ),
-              ["pass", "fail"].includes(normalizeStatus(job.interview_status)),
-              ["pass", "fail"].includes(normalizeStatus(job.result)),
-            ];
-            let foundInProgress = false;
-            const steps = [
-              { label: "Submitted", done: stepStatus[0] },
-              {
-                label: "Exam Status",
-                done: stepStatus[1],
-                inprogress:
-                  !stepStatus[1] &&
-                  !foundInProgress &&
-                  normalizeStatus(job.exam_status) === "pending"
-                    ? (foundInProgress = true)
-                    : false,
-                value: job.exam_status || "Pending",
-              },
-              {
-                label: "Requirements",
-                done: stepStatus[2],
-                inprogress:
-                  !stepStatus[2] &&
-                  !foundInProgress &&
-                  normalizeStatus(job.req_status) === "pending"
-                    ? (foundInProgress = true)
-                    : false,
-                value: ["insufficient", "fail"].includes(
+              );
+              const failIndex = isReqFail
+                ? 2
+                : ["fail"].includes(normalizeStatus(job.exam_status))
+                ? 1
+                : ["fail"].includes(normalizeStatus(job.interview_status))
+                ? 3
+                : ["fail"].includes(normalizeStatus(job.result))
+                ? 4
+                : -1;
+              const stepStatus = [
+                job.submitted,
+                ["pass", "fail"].includes(normalizeStatus(job.exam_status)),
+                ["pass", "fail", "insufficient"].includes(
                   normalizeStatus(job.req_status)
-                )
-                  ? "Fail"
-                  : job.req_status || "Pending",
-              },
-              {
-                label: "Interview Status",
-                done: stepStatus[3],
-                inprogress:
-                  !stepStatus[3] &&
-                  !foundInProgress &&
-                  (normalizeStatus(job.interview_status) === "Pending" ||
-                    normalizeStatus(job.interview_status) === "scheduled")
-                    ? (foundInProgress = true)
-                    : false,
-                value: job.interview_status || "Pending",
-              },
-              {
-                label: "Result",
-                done: stepStatus[4],
-                inprogress:
-                  !stepStatus[4] &&
-                  !foundInProgress &&
-                  normalizeStatus(job.result) === "Pending"
-                    ? (foundInProgress = true)
-                    : false,
-                value: job.result || "Pending",
-              },
-            ];
-            // Find current step
-            const currentStep = steps.findIndex((s) => s.inprogress);
-            return (
-              <div
-                key={idx}
-                className="mb-10 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-800 rounded-2xl shadow-lg p-8 border border-gray-700"
-              >
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <div className="text-xl font-extrabold text-white tracking-wide">
-                      {job.title}
+                ),
+                ["pass", "fail"].includes(
+                  normalizeStatus(job.interview_status)
+                ),
+                ["pass", "fail"].includes(normalizeStatus(job.result)),
+              ];
+              let foundInProgress = false;
+              const steps = [
+                { label: "Submitted", done: stepStatus[0] },
+                {
+                  label: "Exam Status",
+                  done: stepStatus[1],
+                  inprogress:
+                    !stepStatus[1] &&
+                    !foundInProgress &&
+                    normalizeStatus(job.exam_status) === "pending"
+                      ? (foundInProgress = true)
+                      : false,
+                  value: job.exam_status || "Pending",
+                },
+                {
+                  label: "Requirements",
+                  done: stepStatus[2],
+                  inprogress:
+                    !stepStatus[2] &&
+                    !foundInProgress &&
+                    normalizeStatus(job.req_status) === "pending"
+                      ? (foundInProgress = true)
+                      : false,
+                  value: ["insufficient", "fail"].includes(
+                    normalizeStatus(job.req_status)
+                  )
+                    ? "Fail"
+                    : job.req_status || "Pending",
+                },
+                {
+                  label: "Interview Status",
+                  done: stepStatus[3],
+                  inprogress:
+                    !stepStatus[3] &&
+                    !foundInProgress &&
+                    (normalizeStatus(job.interview_status) === "Pending" ||
+                      normalizeStatus(job.interview_status) === "scheduled")
+                      ? (foundInProgress = true)
+                      : false,
+                  value: job.interview_status || "Pending",
+                },
+                {
+                  label: "Result",
+                  done: stepStatus[4],
+                  inprogress:
+                    !stepStatus[4] &&
+                    !foundInProgress &&
+                    normalizeStatus(job.result) === "Pending"
+                      ? (foundInProgress = true)
+                      : false,
+                  value: job.result || "Pending",
+                },
+              ];
+              const currentStep = steps.findIndex((s) => s.inprogress);
+              return (
+                <div
+                  key={idx}
+                  className="mb-10 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-800 rounded-2xl shadow-lg p-8 border border-gray-700"
+                >
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <div className="text-xl font-extrabold text-white tracking-wide">
+                        {job.title}
+                      </div>
+                      <div className="text-sm text-green-400 font-semibold mt-1">
+                        {job.department}
+                      </div>
                     </div>
-                    <div className="text-sm text-green-400 font-semibold mt-1">
-                      {job.department}
+                    <div className="text-xs text-gray-400 bg-gray-700 px-3 py-1 rounded-full">
+                      Applied: {job.submitted ? "Yes" : "No"}
                     </div>
                   </div>
-                  <div className="text-xs text-gray-400 bg-gray-700 px-3 py-1 rounded-full">
-                    Applied: {job.submitted ? "Yes" : "No"}
-                  </div>
-                </div>
-                {/* Stepper */}
-                <div className="relative flex items-center justify-between w-full px-2 py-6">
-                  {/* Progress stepper line */}
-                  <div className="absolute top-1/2 left-0 w-full h-1 -translate-y-1/2 bg-gray-700 rounded-full">
-                    {/* Progress line: green up to failIndex, red after failIndex */}
-                    {(() => {
-                      const lastChecked = steps
-                        .map((step, i) => (step.done ? i : null))
-                        .filter((i) => i !== null)
-                        .pop();
-                      let percent = 0;
-                      if (typeof lastChecked === "number") {
-                        percent = ((lastChecked + 1) / steps.length) * 100;
-                      }
-                      if (
-                        percent > 0 &&
-                        (failIndex === -1 ||
-                          (typeof lastChecked === "number" &&
-                            lastChecked < failIndex))
-                      ) {
-                        return (
-                          <div
-                            className="absolute h-1 bg-green-400 rounded-full"
-                            style={{
-                              left: 0,
-                              top: 0,
-                              width: `${percent}%`,
-                              transition: "width 0.4s",
-                            }}
-                          ></div>
-                        );
-                      }
-                      // If failIndex is set, show green up to failIndex, red after
-                      if (failIndex !== -1) {
-                        const greenPercent = (failIndex / steps.length) * 100;
-                        return (
-                          <>
+                  {/* Stepper */}
+                  <div className="relative flex items-center justify-between w-full px-2 py-6">
+                    {/* Progress stepper line */}
+                    <div className="absolute top-1/2 left-0 w-full h-1 -translate-y-1/2 bg-gray-700 rounded-full">
+                      {/* Progress line: green up to failIndex, red after failIndex */}
+                      {(() => {
+                        const lastChecked = steps
+                          .map((step, i) => (step.done ? i : null))
+                          .filter((i) => i !== null)
+                          .pop();
+                        let percent = 0;
+                        if (typeof lastChecked === "number") {
+                          percent = ((lastChecked + 1) / steps.length) * 100;
+                        }
+                        if (
+                          percent > 0 &&
+                          (failIndex === -1 ||
+                            (typeof lastChecked === "number" &&
+                              lastChecked < failIndex))
+                        ) {
+                          return (
                             <div
                               className="absolute h-1 bg-green-400 rounded-full"
                               style={{
                                 left: 0,
                                 top: 0,
-                                width: `${greenPercent}%`,
+                                width: `${percent}%`,
                                 transition: "width 0.4s",
                               }}
                             ></div>
-                            <div
-                              className="absolute h-1 bg-red-500 rounded-full"
-                              style={{
-                                left: `${greenPercent}%`,
-                                top: 0,
-                                width: `${100 - greenPercent}%`,
-                                transition: "width 0.4s",
-                              }}
-                            ></div>
-                          </>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </div>
-                  {steps.map((step, i) => (
-                    <div
-                      key={i}
-                      className="relative z-10 flex-1 flex flex-col items-center"
-                    >
-                      {/* Step icon: check for done, circle for current, outlined for upcoming, red X for failed */}
-                      <div
-                        className="w-7 h-7 flex items-center justify-center"
-                        style={{ position: "relative", top: "24px" }}
-                      >
-                        {failIndex !== -1 && i >= failIndex ? (
-                          // Red X icon for failed steps
-                          <span className="w-7 h-7 flex items-center justify-center rounded-full bg-red-500 text-white">
-                            <svg
-                              width="18"
-                              height="18"
-                              viewBox="0 0 20 20"
-                              fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                d="M6 6L14 14M6 14L14 6"
-                                stroke="white"
-                                strokeWidth="2.2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          </span>
-                        ) : step.done ? (
-                          <span className="w-7 h-7 flex items-center justify-center rounded-full bg-green-400 text-white">
-                            <svg
-                              width="18"
-                              height="18"
-                              viewBox="0 0 20 20"
-                              fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                d="M5 10.5L9 14.5L15 7.5"
-                                stroke="white"
-                                strokeWidth="2.2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          </span>
-                        ) : i === currentStep ? (
-                          <span className="w-7 h-7 flex items-center justify-center rounded-full border-2 border-blue-400 bg-gray-900">
-                            <span className="w-3 h-3 rounded-full bg-blue-400"></span>
-                          </span>
-                        ) : (
-                          <span className="w-7 h-7 flex items-center justify-center rounded-full border-2 border-gray-600 bg-gray-900">
-                            <span className="w-3 h-3 rounded-full bg-gray-700"></span>
-                          </span>
-                        )}
-                      </div>
-                      {/* Move label and status below the line using absolute positioning */}
-                      <div
-                        className="flex flex-col items-center"
-                        style={{ marginTop: "72px" }}
-                      >
-                        <div
-                          className={`mb-1 text-xs font-semibold ${
-                            failIndex !== -1 && i >= failIndex
-                              ? "text-red-500"
-                              : step.done
-                              ? "text-green-400"
-                              : i === currentStep
-                              ? "text-blue-400"
-                              : "text-gray-500"
-                          }`}
-                        >
-                          {step.label}
-                        </div>
-                        <div
-                          className="text-xs mb-2 mt-1"
-                          style={{
-                            color:
-                              failIndex !== -1 && i >= failIndex
-                                ? "#ef4444"
-                                : i === 2 && isReqFail
-                                ? "#ef4444"
-                                : (() => {
-                                    let statusValue = "";
-                                    if (i === 1) statusValue = job.exam_status;
-                                    if (i === 2) statusValue = job.req_status;
-                                    if (i === 3)
-                                      statusValue = job.interview_status;
-                                    if (i === 4) statusValue = job.result;
-                                    if (typeof statusValue === "string") {
-                                      const val = statusValue
-                                        .trim()
-                                        .toLowerCase();
-                                      if (i === 3 && val === "scheduled")
-                                        return "#3b82f6"; // Interview Status: blue if scheduled
-                                      if (val === "pass") return "#22c55e"; // green
-                                      if (val === "fail") return "#ef4444"; // red
-                                      if (val === "pending" || val === "")
-                                        return "#3b82f6"; // blue
-                                      return "#3b82f6"; // blue for other values
-                                    }
-                                    return "#3b82f6";
-                                  })(),
-                          }}
-                        >
-                          {(() => {
-                            if (i === 1) return job.exam_status || "Pending";
-                            if (i === 2) return job.req_status || "Pending";
-                            if (i === 3)
-                              return job.interview_status || "Pending";
-                            if (i === 4) return job.result || "Pending";
-                            return "";
-                          })()}
-                        </div>
-                        {/* Show Interview Date below Interview Status if scheduled */}
-                        {step.label === "Interview Status" &&
-                          normalizeStatus(job.interview_status) ===
-                            "scheduled" &&
-                          job.interview_date && (
-                            <div className="text-xs mt-1 text-blue-400">
-                              Interview Date: {job.interview_date}
-                            </div>
-                          )}
-                      </div>
+                          );
+                        }
+                        // If failIndex is set, show green up to failIndex, red after
+                        if (failIndex !== -1) {
+                          const greenPercent = (failIndex / steps.length) * 100;
+                          return (
+                            <>
+                              <div
+                                className="absolute h-1 bg-green-400 rounded-full"
+                                style={{
+                                  left: 0,
+                                  top: 0,
+                                  width: `${greenPercent}%`,
+                                  transition: "width 0.4s",
+                                }}
+                              ></div>
+                              <div
+                                className="absolute h-1 bg-red-500 rounded-full"
+                                style={{
+                                  left: `${greenPercent}%`,
+                                  top: 0,
+                                  width: `${100 - greenPercent}%`,
+                                  transition: "width 0.4s",
+                                }}
+                              ></div>
+                            </>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
-                  ))}
+                    {steps.map((step, i) => (
+                      <div
+                        key={i}
+                        className="relative z-10 flex-1 flex flex-col items-center"
+                      >
+                        {/* Step icon: check for done, circle for current, outlined for upcoming, red X for failed */}
+                        <div
+                          className="w-7 h-7 flex items-center justify-center"
+                          style={{ position: "relative", top: "24px" }}
+                        >
+                          {failIndex !== -1 && i >= failIndex ? (
+                            // Red X icon for failed steps
+                            <span className="w-7 h-7 flex items-center justify-center rounded-full bg-red-500 text-white">
+                              <svg
+                                width="18"
+                                height="18"
+                                viewBox="0 0 20 20"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="M6 6L14 14M6 14L14 6"
+                                  stroke="white"
+                                  strokeWidth="2.2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </span>
+                          ) : step.done ? (
+                            <span className="w-7 h-7 flex items-center justify-center rounded-full bg-green-400 text-white">
+                              <svg
+                                width="18"
+                                height="18"
+                                viewBox="0 0 20 20"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="M5 10.5L9 14.5L15 7.5"
+                                  stroke="white"
+                                  strokeWidth="2.2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </span>
+                          ) : i === currentStep ? (
+                            <span className="w-7 h-7 flex items-center justify-center rounded-full border-2 border-blue-400 bg-gray-900">
+                              <span className="w-3 h-3 rounded-full bg-blue-400"></span>
+                            </span>
+                          ) : (
+                            <span className="w-7 h-7 flex items-center justify-center rounded-full border-2 border-gray-600 bg-gray-900">
+                              <span className="w-3 h-3 rounded-full bg-gray-700"></span>
+                            </span>
+                          )}
+                        </div>
+                        {/* Move label and status below the line using absolute positioning */}
+                        <div
+                          className="flex flex-col items-center"
+                          style={{ marginTop: "72px" }}
+                        >
+                          <div
+                            className={`mb-1 text-xs font-semibold ${
+                              failIndex !== -1 && i >= failIndex
+                                ? "text-red-500"
+                                : step.done
+                                ? "text-green-400"
+                                : i === currentStep
+                                ? "text-blue-400"
+                                : "text-gray-500"
+                            }`}
+                          >
+                            {step.label}
+                          </div>
+                          <div
+                            className="text-xs mb-2 mt-1"
+                            style={{
+                              color:
+                                failIndex !== -1 && i >= failIndex
+                                  ? "#ef4444"
+                                  : i === 2 && isReqFail
+                                  ? "#ef4444"
+                                  : (() => {
+                                      let statusValue = "";
+                                      if (i === 1)
+                                        statusValue = job.exam_status;
+                                      if (i === 2) statusValue = job.req_status;
+                                      if (i === 3)
+                                        statusValue = job.interview_status;
+                                      if (i === 4) statusValue = job.result;
+                                      if (typeof statusValue === "string") {
+                                        const val = statusValue
+                                          .trim()
+                                          .toLowerCase();
+                                        if (i === 3 && val === "scheduled")
+                                          return "#3b82f6"; // Interview Status: blue if scheduled
+                                        if (val === "pass") return "#22c55e"; // green
+                                        if (val === "fail") return "#ef4444"; // red
+                                        if (val === "pending" || val === "")
+                                          return "#3b82f6"; // blue
+                                        return "#3b82f6"; // blue for other values
+                                      }
+                                      return "#3b82f6";
+                                    })(),
+                            }}
+                          >
+                            {(() => {
+                              if (i === 1) return job.exam_status || "Pending";
+                              if (i === 2) return job.req_status || "Pending";
+                              if (i === 3)
+                                return job.interview_status || "Pending";
+                              if (i === 4) return job.result || "Pending";
+                              return "";
+                            })()}
+                          </div>
+                          {/* Show Interview Date below Interview Status if scheduled */}
+                          {step.label === "Interview Status" &&
+                            normalizeStatus(job.interview_status) ===
+                              "scheduled" &&
+                            job.interview_date && (
+                              <div className="text-xs mt-1 text-blue-400">
+                                Interview Date: {job.interview_date}
+                              </div>
+                            )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            );
-          })
+              );
+            })
         )}
       </div>
       {/* Job Opening Modal */}
