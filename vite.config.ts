@@ -25,4 +25,5 @@ export default defineConfig({
     },
     chunkSizeWarningLimit: 3000, // (optional) increase warning threshold
   },
+  base: "./",
 });
